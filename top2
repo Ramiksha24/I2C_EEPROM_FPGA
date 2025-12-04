@@ -1,0 +1,102 @@
+module i2c_debug_wrapper (
+    input  sys_clk,       // 100MHz board clock
+    input  sys_rst_n,     // Active LOW reset button
+    inout  scl,
+    inout  sda
+);
+
+// Separate I/O signals
+wire scl_out, scl_in, scl_oe;
+wire sda_out, sda_in, sda_oe;
+
+// Tri-state buffers
+assign scl = scl_oe ? scl_out : 1'bz;
+assign sda = sda_oe ? sda_out : 1'bz;
+assign scl_in = scl;
+assign sda_in = sda;
+
+// VIO control signals
+wire [7:0]  vio_addr;
+wire [15:0] vio_sub_addr;
+wire        vio_sub_len;
+wire [23:0] vio_byte_len;
+wire [7:0]  vio_data;
+wire        vio_req;
+
+// I2C outputs
+wire [7:0] data_out;
+wire valid_out, busy, nack, req_data_chunk;
+
+// **Add internal debug signals**
+wire [3:0] state;
+wire [7:0] byte_sr;
+wire [2:0] cntr;
+wire       scl_is_low;
+
+// VIO for control
+vio_0 vio_inst (
+    .clk(sys_clk),
+    .probe_out0(vio_addr),      // 8 bits
+    .probe_out1(vio_sub_addr),  // 16 bits
+    .probe_out2(vio_sub_len),   // 1 bit
+    .probe_out3(vio_byte_len),  // 24 bits
+    .probe_out4(vio_data),      // 8 bits
+    .probe_out5(vio_req),       // 1 bit - pulse this to start
+    .probe_in0(busy),           // Monitor status
+    .probe_in1(nack),
+    .probe_in2(data_out),
+    .probe_in3(valid_out)
+);
+
+// ILA for waveform capture
+ila_0 ila_inst (
+    .clk(sys_clk),
+    .probe0(scl_in),        // 1 bit - actual SCL line
+    .probe1(sda_in),        // 1 bit - actual SDA line
+    .probe2(scl_out),       // 1 bit - what we drive
+    .probe3(sda_out),       // 1 bit - what we drive
+    .probe4(scl_oe),        // 1 bit - are we driving?
+    .probe5(sda_oe),        // 1 bit - are we driving?
+    .probe6(busy),          // 1 bit
+    .probe7(state),         // 4 bits - FSM state
+    .probe8(byte_sr),       // 8 bits - shift register
+    .probe9(cntr),          // 3 bits - bit counter
+    .probe10(scl_is_low),   // 1 bit - timing flag
+    .probe11(vio_req),       // 1 bit - trigger signal
+    .probe12(data_out)
+);
+
+// I2C Master with DEBUG enabled
+i2c_master `ifdef DEBUG #(.DEBUG(1)) `endif i2c_inst (
+    .i_clk(sys_clk),
+    .reset_n(sys_rst_n),    // Now properly active LOW
+    .i_addr_w_rw(vio_addr),
+    .i_sub_addr(vio_sub_addr),
+    .i_sub_len(vio_sub_len),
+    .i_byte_len(vio_byte_len),
+    .i_data_write(vio_data),
+    .req_trans(vio_req),
+    
+    .data_out(data_out),
+    .valid_out(valid_out),
+    
+    // Separate I/O
+    .scl_out(scl_out),
+    .scl_in(scl_in),
+    .scl_oe(scl_oe),
+    .sda_out(sda_out),
+    .sda_in(sda_in),
+    .sda_oe(sda_oe),
+    
+    .req_data_chunk(req_data_chunk),
+    .busy(busy),
+    .nack(nack),
+    
+    // Debug outputs
+    .state(state),
+    .byte_sr(byte_sr),
+    .cntr(cntr),
+    .scl_is_low(scl_is_low)
+);
+
+endmodule
