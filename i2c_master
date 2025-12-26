@@ -446,7 +446,8 @@ module i2c_eeprom_master (
                                 scl <= 0;
                                 bit_cnt <= bit_cnt - 1;
                                 if (bit_cnt == 1) begin
-                                    data_out <= {shift_reg[6:0], sda_in};
+                                   // data_out <= {shift_reg[6:0], sda_in};
+data_out <= shift_out;
                                     state <= SEND_NACK;
                                 end
                             end
